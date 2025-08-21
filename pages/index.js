@@ -40,6 +40,11 @@ export default function Home() {
   const [maxDuration, setMaxDuration] = useState(0);
   const [likesMaxBound, setLikesMaxBound] = useState(0);
   const [durationMaxBound, setDurationMaxBound] = useState(0);
+  const [pendingMinLikeRatio, setPendingMinLikeRatio] = useState(0);
+  const [pendingMinLikes, setPendingMinLikes] = useState(0);
+  const [pendingMaxLikes, setPendingMaxLikes] = useState(0);
+  const [pendingMinDuration, setPendingMinDuration] = useState(0);
+  const [pendingMaxDuration, setPendingMaxDuration] = useState(0);
 
   const fetchVideos = async () => {
     setLoading(true);
@@ -74,6 +79,11 @@ export default function Home() {
       setMinDuration(0);
       setMaxDuration(maxDurationVal);
       setMinLikeRatio(0);
+      setPendingMinLikes(0);
+      setPendingMaxLikes(maxLikesVal);
+      setPendingMinDuration(0);
+      setPendingMaxDuration(maxDurationVal);
+      setPendingMinLikeRatio(0);
       setSortBy('views');
       setVideos(processed);
     } catch (e) {
@@ -112,6 +122,14 @@ export default function Home() {
     a.download = 'channel_videos_sorted.csv';
     a.click();
     window.URL.revokeObjectURL(url);
+  };
+
+  const applyFilters = () => {
+    setMinLikeRatio(pendingMinLikeRatio);
+    setMinLikes(pendingMinLikes);
+    setMaxLikes(pendingMaxLikes);
+    setMinDuration(pendingMinDuration);
+    setMaxDuration(pendingMaxDuration);
   };
 
   return (
@@ -183,64 +201,67 @@ export default function Home() {
             </label>
           </div>
           <div style={{ marginBottom: '1rem' }}>
-            <label>Min like ratio: {Math.round(minLikeRatio * 100)}%</label>
+            <label>Min like ratio: {Math.round(pendingMinLikeRatio * 100)}%</label>
             <input
               type="range"
               min="0"
               max="1"
               step="0.01"
-              value={minLikeRatio}
-              onChange={(e) => setMinLikeRatio(Number(e.target.value))}
+              value={pendingMinLikeRatio}
+              onChange={(e) => setPendingMinLikeRatio(Number(e.target.value))}
               style={{ width: '100%' }}
             />
           </div>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
             <label style={{ flex: 1 }}>
-              Min likes: {minLikes}
+              Min likes: {pendingMinLikes}
               <input
                 type="range"
                 min="0"
                 max={likesMaxBound}
-                value={minLikes}
-                onChange={(e) => setMinLikes(Number(e.target.value))}
+                value={pendingMinLikes}
+                onChange={(e) => setPendingMinLikes(Number(e.target.value))}
                 style={{ width: '100%' }}
               />
             </label>
             <label style={{ flex: 1 }}>
-              Max likes: {maxLikes}
+              Max likes: {pendingMaxLikes}
               <input
                 type="range"
                 min="0"
                 max={likesMaxBound}
-                value={maxLikes}
-                onChange={(e) => setMaxLikes(Number(e.target.value))}
+                value={pendingMaxLikes}
+                onChange={(e) => setPendingMaxLikes(Number(e.target.value))}
                 style={{ width: '100%' }}
               />
             </label>
           </div>
           <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
             <label style={{ flex: 1 }}>
-              Min duration: {formatDuration(minDuration)}
+              Min duration: {formatDuration(pendingMinDuration)}
               <input
                 type="range"
                 min="0"
                 max={durationMaxBound}
-                value={minDuration}
-                onChange={(e) => setMinDuration(Number(e.target.value))}
+                value={pendingMinDuration}
+                onChange={(e) => setPendingMinDuration(Number(e.target.value))}
                 style={{ width: '100%' }}
               />
             </label>
             <label style={{ flex: 1 }}>
-              Max duration: {formatDuration(maxDuration)}
+              Max duration: {formatDuration(pendingMaxDuration)}
               <input
                 type="range"
                 min="0"
                 max={durationMaxBound}
-                value={maxDuration}
-                onChange={(e) => setMaxDuration(Number(e.target.value))}
+                value={pendingMaxDuration}
+                onChange={(e) => setPendingMaxDuration(Number(e.target.value))}
                 style={{ width: '100%' }}
               />
             </label>
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <button onClick={applyFilters}>Apply filters</button>
           </div>
           {displayedVideos.map((v) => (
             <div
