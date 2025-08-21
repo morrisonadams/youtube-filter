@@ -1,5 +1,23 @@
 import { useState } from 'react';
 
+function parseDuration(iso) {
+  const match = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+  if (!match) return 0;
+  const [, h, m, s] = match;
+  return (
+    (parseInt(h || '0', 10) * 3600) +
+    (parseInt(m || '0', 10) * 60) +
+    parseInt(s || '0', 10)
+  );
+}
+
+function formatDuration(total) {
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h ? `${h}h ${m}m ${s}s` : `${m}m ${s}s`;
+}
+
 export default function Home() {
   const today = new Date();
   const defaultEnd = today.toISOString().slice(0, 10);
@@ -14,6 +32,14 @@ export default function Home() {
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [sortBy, setSortBy] = useState('views');
+  const [minLikes, setMinLikes] = useState(0);
+  const [maxLikes, setMaxLikes] = useState(0);
+  const [minLikeRatio, setMinLikeRatio] = useState(0);
+  const [minDuration, setMinDuration] = useState(0);
+  const [maxDuration, setMaxDuration] = useState(0);
+  const [likesMaxBound, setLikesMaxBound] = useState(0);
+  const [durationMaxBound, setDurationMaxBound] = useState(0);
 
   const fetchVideos = async () => {
     setLoading(true);
@@ -32,7 +58,24 @@ export default function Home() {
         throw new Error(text || 'Request failed');
       }
       const data = await res.json();
-      setVideos(data.videos || []);
+      const processed = (data.videos || []).map((v) => {
+        const likes = Number(v.Likes || 0);
+        const views = Number(v.Views || 0);
+        const likeRatio = views ? likes / views : 0;
+        const durationSeconds = parseDuration(v.Duration || '');
+        return { ...v, Likes: likes, LikeRatio: likeRatio, DurationSeconds: durationSeconds };
+      });
+      const maxLikesVal = Math.max(0, ...processed.map((v) => v.Likes));
+      const maxDurationVal = Math.max(0, ...processed.map((v) => v.DurationSeconds));
+      setLikesMaxBound(maxLikesVal);
+      setDurationMaxBound(maxDurationVal);
+      setMinLikes(0);
+      setMaxLikes(maxLikesVal);
+      setMinDuration(0);
+      setMaxDuration(maxDurationVal);
+      setMinLikeRatio(0);
+      setSortBy('views');
+      setVideos(processed);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -40,10 +83,22 @@ export default function Home() {
     }
   };
 
+  const displayedVideos = videos
+    .filter((v) => v.LikeRatio >= minLikeRatio)
+    .filter((v) => v.Likes >= minLikes)
+    .filter((v) => v.Likes <= maxLikes)
+    .filter((v) => v.DurationSeconds >= minDuration)
+    .filter((v) => v.DurationSeconds <= maxDuration)
+    .sort((a, b) => {
+      if (sortBy === 'likeRatio') return b.LikeRatio - a.LikeRatio;
+      if (sortBy === 'duration') return b.DurationSeconds - a.DurationSeconds;
+      return b.Views - a.Views;
+    });
+
   const downloadCsv = () => {
-    if (!videos.length) return;
-    const headers = ['Title', 'Views', 'Published', 'Duration', 'Video URL'];
-    const lines = videos.map((v) =>
+    if (!displayedVideos.length) return;
+    const headers = ['Title', 'Views', 'Likes', 'LikeRatio', 'Published', 'Duration', 'Video URL'];
+    const lines = displayedVideos.map((v) =>
       headers
         .map((h) => `${String(v[h] || '').replace(/"/g, '""')}`)
         .map((s) => `"${s}"`)
@@ -109,30 +164,107 @@ export default function Home() {
         {loading ? 'Loading...' : 'Fetch and sort'}
       </button>
       {error && <p style={{ color: 'red' }}>{error}</p>}
-      {videos.length > 0 && (
+      {displayedVideos.length > 0 && (
         <div style={{ marginTop: '1rem' }}>
           <p>
-            Found {videos.length} videos between {start} and {end}. Sorted by view
-            count descending.
+            Found {displayedVideos.length} videos between {start} and {end}.
           </p>
           <button onClick={downloadCsv} style={{ marginBottom: '1rem' }}>
             Download CSV
           </button>
-          {videos.map((v) => (
+          <div style={{ marginBottom: '1rem' }}>
+            <label>
+              Sort by:{' '}
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                <option value="views">Views</option>
+                <option value="likeRatio">Like ratio</option>
+                <option value="duration">Duration</option>
+              </select>
+            </label>
+          </div>
+          <div style={{ marginBottom: '1rem' }}>
+            <label>Min like ratio: {Math.round(minLikeRatio * 100)}%</label>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={minLikeRatio}
+              onChange={(e) => setMinLikeRatio(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+            <label style={{ flex: 1 }}>
+              Min likes: {minLikes}
+              <input
+                type="range"
+                min="0"
+                max={likesMaxBound}
+                value={minLikes}
+                onChange={(e) => setMinLikes(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </label>
+            <label style={{ flex: 1 }}>
+              Max likes: {maxLikes}
+              <input
+                type="range"
+                min="0"
+                max={likesMaxBound}
+                value={maxLikes}
+                onChange={(e) => setMaxLikes(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </label>
+          </div>
+          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+            <label style={{ flex: 1 }}>
+              Min duration: {formatDuration(minDuration)}
+              <input
+                type="range"
+                min="0"
+                max={durationMaxBound}
+                value={minDuration}
+                onChange={(e) => setMinDuration(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </label>
+            <label style={{ flex: 1 }}>
+              Max duration: {formatDuration(maxDuration)}
+              <input
+                type="range"
+                min="0"
+                max={durationMaxBound}
+                value={maxDuration}
+                onChange={(e) => setMaxDuration(Number(e.target.value))}
+                style={{ width: '100%' }}
+              />
+            </label>
+          </div>
+          {displayedVideos.map((v) => (
             <div
               key={v['Video URL']}
               style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', border: '1px solid #ddd', padding: '0.5rem' }}
             >
               {v.Thumb && (
-                <img src={v.Thumb} alt="thumbnail" style={{ width: '120px', height: '90px', objectFit: 'cover' }} />
+                <img
+                  src={v.Thumb}
+                  alt="thumbnail"
+                  style={{ width: '120px', height: '90px', objectFit: 'cover' }}
+                />
               )}
               <div>
                 <a href={v['Video URL']} target="_blank" rel="noopener noreferrer">
                   <strong>{v.Title}</strong>
                 </a>
                 <div>Views: {v.Views.toLocaleString()}</div>
+                <div>Likes: {v.Likes.toLocaleString()}</div>
+                <div>
+                  Like Ratio: {(v.LikeRatio * 100).toFixed(1)}%
+                </div>
                 <div>Published: {new Date(v.Published).toISOString().slice(0, 10)}</div>
-                {v.Duration && <div>ISO 8601 Duration: {v.Duration}</div>}
+                <div>Duration: {formatDuration(v.DurationSeconds)}</div>
               </div>
             </div>
           ))}
