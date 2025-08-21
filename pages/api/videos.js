@@ -157,6 +157,7 @@ export default async function handler(req, res) {
       return {
         Title: sn.title || '',
         Views: Number(st.viewCount || 0),
+        Likes: Number(st.likeCount || 0),
         Published: sn.publishedAt || '',
         Duration: v.contentDetails?.duration || '',
         'Video URL': `https://www.youtube.com/watch?v=${c.videoId}`,
