@@ -1,3 +1,62 @@
+export function parseChannelIdOrHandle(text) {
+  const t = text.trim();
+  if (t.startsWith('http')) {
+    try {
+      const u = new URL(t);
+      const parts = u.pathname.split('/').filter(Boolean);
+      if (parts.length >= 2 && parts[0].toLowerCase() === 'channel') {
+        return { channelId: parts[1] };
+      }
+      if (parts.length >= 1 && parts[0].startsWith('@')) {
+        return { handle: parts[0].slice(1) };
+      }
+      if (parts.length) {
+        return { handle: parts[parts.length - 1].replace(/^@/, '') };
+      }
+    } catch (e) {}
+  }
+  if (t.startsWith('@')) {
+    return { handle: t.slice(1) };
+  }
+  if (t.startsWith('UC') && t.length >= 20) {
+    return { channelId: t };
+  }
+  return { handle: t.replace(/^@/, '') };
+}
+
+export async function getChannelId(ref, apiKey) {
+  if (ref.channelId) return ref.channelId;
+  const q = ref.handle;
+  const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(
+    q
+  )}&key=${apiKey}`;
+  try {
+    const search = await fetch(searchUrl).then((r) => r.json());
+    const items = search.items || [];
+    if (items.length) {
+      return items[0].snippet?.channelId || items[0].id?.channelId || null;
+    }
+    console.warn('getChannelId: search returned no results', {
+      query: q,
+      response: search,
+    });
+    const usernameUrl = `https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${encodeURIComponent(
+      q
+    )}&key=${apiKey}`;
+    const ch = await fetch(usernameUrl).then((r) => r.json());
+    if (ch.items && ch.items.length) {
+      return ch.items[0].id;
+    }
+    console.error('getChannelId: username lookup failed', {
+      query: q,
+      response: ch,
+    });
+  } catch (e) {
+    console.error('getChannelId: fetch failed', { query: q, error: e });
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   const { channel, start, end, limit = '0' } = req.query;
   const apiKey = process.env.YOUTUBE_API_KEY;
@@ -16,55 +75,6 @@ export default async function handler(req, res) {
     ? new Date(`${start}T00:00:00Z`)
     : new Date('1970-01-01T00:00:00Z');
   const endDate = end ? new Date(`${end}T23:59:59Z`) : new Date();
-
-  function parseChannelIdOrHandle(text) {
-    const t = text.trim();
-    if (t.startsWith('http')) {
-      try {
-        const u = new URL(t);
-        const parts = u.pathname.split('/').filter(Boolean);
-        if (parts.length >= 2 && parts[0].toLowerCase() === 'channel') {
-          return { channelId: parts[1] };
-        }
-        if (parts.length >= 1 && parts[0].startsWith('@')) {
-          return { handle: parts[0].slice(1) };
-        }
-        if (parts.length) {
-          return { handle: parts[parts.length - 1].replace(/^@/, '') };
-        }
-      } catch (e) {}
-    }
-    if (t.startsWith('@')) {
-      return { handle: t.slice(1) };
-    }
-    if (t.startsWith('UC') && t.length >= 20) {
-      return { channelId: t };
-    }
-    return { handle: t.replace(/^@/, '') };
-  }
-
-  async function getChannelId(ref) {
-    if (ref.channelId) return ref.channelId;
-    const q = ref.handle;
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&maxResults=1&q=${encodeURIComponent(
-      q
-    )}&key=${apiKey}`;
-    const search = await fetch(searchUrl).then((r) => r.json());
-    const items = search.items || [];
-    if (items.length) {
-      return (
-        items[0].snippet?.channelId || items[0].id?.channelId || null
-      );
-    }
-    const usernameUrl = `https://www.googleapis.com/youtube/v3/channels?part=id&forUsername=${encodeURIComponent(
-      q
-    )}&key=${apiKey}`;
-    const ch = await fetch(usernameUrl).then((r) => r.json());
-    if (ch.items && ch.items.length) {
-      return ch.items[0].id;
-    }
-    return null;
-  }
 
   async function getUploadsPlaylistId(channelId) {
     const url = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`;
@@ -105,8 +115,9 @@ export default async function handler(req, res) {
   }
 
   const ref = parseChannelIdOrHandle(Array.isArray(channel) ? channel[0] : channel);
-  const channelId = await getChannelId(ref);
+  const channelId = await getChannelId(ref, apiKey);
   if (!channelId) {
+    console.error('Could not resolve the channel', { input: channel, ref });
     res.status(404).json({ error: 'Could not resolve the channel.' });
     return;
   }
