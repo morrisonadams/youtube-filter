@@ -133,7 +133,7 @@ export default function Home() {
   };
 
   return (
-    <div style={{ padding: '1rem', maxWidth: '800px', margin: '0 auto' }}>
+    <div className="container">
       <h1>YouTube channel video sorter</h1>
       <p>Sort a channel's uploads by view count within a date range.</p>
       <div style={{ marginBottom: '1rem' }}>
@@ -178,10 +178,10 @@ export default function Home() {
           />
         </label>
       </div>
-      <button onClick={fetchVideos} disabled={loading} style={{ padding: '0.5rem 1rem' }}>
+      <button onClick={fetchVideos} disabled={loading}>
         {loading ? 'Loading...' : 'Fetch and sort'}
       </button>
-      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {error && <p style={{ color: '#ff6b6b' }}>{error}</p>}
       {displayedVideos.length > 0 && (
         <div style={{ marginTop: '1rem' }}>
           <p>
@@ -264,10 +264,7 @@ export default function Home() {
             <button onClick={applyFilters}>Apply filters</button>
           </div>
           {displayedVideos.map((v) => (
-            <div
-              key={v['Video URL']}
-              style={{ display: 'flex', gap: '1rem', marginBottom: '1rem', border: '1px solid #ddd', padding: '0.5rem' }}
-            >
+            <div key={v['Video URL']} className="video-card">
               {v.Thumb && (
                 <img
                   src={v.Thumb}
